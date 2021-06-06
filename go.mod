@@ -1,4 +1,4 @@
-module github.com/openshift/coredns-mdns
+module github.com/itszero/coredns-mdns
 
 require (
 	github.com/Shopify/sarama v1.21.0 // indirect
