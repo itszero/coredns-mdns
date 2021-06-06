@@ -146,7 +146,7 @@ func (m *MDNS) BrowseMDNS() {
 				// I was having trouble using domains other than .local. Need further investigation.
 				// After further investigation, maybe this is working as intended:
 				// https://lists.freedesktop.org/archives/avahi/2006-February/000517.html
-				hostCustomDomain := m.ReplaceDomain(localEntry.HostName)
+				hostCustomDomain := strings.ToLower(m.ReplaceDomain(localEntry.HostName))
 				mdnsHosts[hostCustomDomain] = entry
 			} else {
 				log.Debugf("Ignoring entry '%s' because it doesn't match filter '%s'\n",
