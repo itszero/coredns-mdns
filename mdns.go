@@ -42,18 +42,18 @@ func (m MDNS) ReplaceDomain(input string) string {
 	return input[0:len(input)-suffixLen] + fqDomain
 }
 
-func (m MDNS) AddARecord(msg *dns.Msg, state *request.Request, hosts map[string]*zeroconf.ServiceEntry, name string) bool {
+func (m MDNS) AddARecord(msg *dns.Msg, state *request.Request, hosts map[string]*zeroconf.ServiceEntry, name string, queryType uint16) bool {
 	// Add A and AAAA record for name (if it exists) to msg.
 	// A records need to be returned in both A and CNAME queries, this function
 	// provides common code for doing so.
 	answerEntry, present := hosts[name]
 	if present {
-		if answerEntry.AddrIPv4 != nil {
+		if answerEntry.AddrIPv4 != nil && queryType == dns.TypeA {
 			aheader := dns.RR_Header{Name: name, Rrtype: dns.TypeA, Class: dns.ClassINET, Ttl: 60}
 			// TODO: Support multiple addresses
 			msg.Answer = append(msg.Answer, &dns.A{Hdr: aheader, A: answerEntry.AddrIPv4[0]})
 		}
-		if answerEntry.AddrIPv6 != nil {
+		if answerEntry.AddrIPv6 != nil && queryType == dns.TypeAAAA {
 			aaaaheader := dns.RR_Header{Name: name, Rrtype: dns.TypeAAAA, Class: dns.ClassINET, Ttl: 60}
 			msg.Answer = append(msg.Answer, &dns.AAAA{Hdr: aaaaheader, AAAA: answerEntry.AddrIPv6[0]})
 		}
@@ -130,11 +130,12 @@ func (m MDNS) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg) (i
 
 func (m *MDNS) BrowseMDNS() {
 	entriesCh := make(chan *zeroconf.ServiceEntry)
+	entries2Ch := make(chan *zeroconf.ServiceEntry)
 	srvEntriesCh := make(chan *zeroconf.ServiceEntry)
 	mdnsHosts := make(map[string]*zeroconf.ServiceEntry)
 	srvHosts := make(map[string][]*zeroconf.ServiceEntry)
 	cnames := make(map[string]string)
-	go func(results <-chan *zeroconf.ServiceEntry) {
+	retrieveEntires := func (results <-chan *zeroconf.ServiceEntry) {
 		log.Debug("Retrieving mDNS entries")
 		for entry := range results {
 			// Make a copy of the entry so zeroconf can't later overwrite our changes
@@ -152,7 +153,10 @@ func (m *MDNS) BrowseMDNS() {
 					localEntry.Instance, m.filter)
 			}
 		}
-	}(entriesCh)
+	}
+
+	go retrieveEntires(entriesCh)
+	go retrieveEntires(entries2Ch)
 
 	go func(results <-chan *zeroconf.ServiceEntry) {
 		log.Debug("Retrieving SRV mDNS entries")
@@ -180,7 +184,8 @@ func (m *MDNS) BrowseMDNS() {
 			iface = foundIface
 		}
 	}
-	_ = queryService("_workstation._tcp", entriesCh, iface, ZeroconfImpl{})
+	_ = queryService("_http._tcp", entriesCh, iface, ZeroconfImpl{})
+	_ = queryService("_ssh._tcp", entries2Ch, iface, ZeroconfImpl{})
 	_ = queryService("_etcd-server-ssl._tcp", srvEntriesCh, iface, ZeroconfImpl{})
 
 	m.mutex.Lock()
