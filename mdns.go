@@ -42,7 +42,7 @@ func (m MDNS) ReplaceDomain(input string) string {
 	return input[0:len(input)-suffixLen] + fqDomain
 }
 
-func (m MDNS) AddARecord(msg *dns.Msg, state *request.Request, hosts map[string]*zeroconf.ServiceEntry, name string, queryType uint16) bool {
+func (m MDNS) AddRecord(msg *dns.Msg, state *request.Request, hosts map[string]*zeroconf.ServiceEntry, name string, queryType uint16) bool {
 	// Add A and AAAA record for name (if it exists) to msg.
 	// A records need to be returned in both A and CNAME queries, this function
 	// provides common code for doing so.
@@ -98,7 +98,7 @@ func (m MDNS) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg) (i
 	m.mutex.RLock()
 	defer m.mutex.RUnlock()
 
-	if m.AddARecord(msg, &state, mdnsHosts, state.Name()) {
+	if m.AddRecord(msg, &state, mdnsHosts, state.Name(), state.QType()) {
 		log.Debug(msg)
 		w.WriteMsg(msg)
 		return dns.RcodeSuccess, nil
@@ -108,7 +108,7 @@ func (m MDNS) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg) (i
 	if present {
 		cnameheader := dns.RR_Header{Name: state.QName(), Rrtype: dns.TypeCNAME, Class: dns.ClassINET, Ttl: 0}
 		msg.Answer = append(msg.Answer, &dns.CNAME{Hdr: cnameheader, Target: cnameTarget})
-		m.AddARecord(msg, &state, mdnsHosts, cnameTarget)
+		m.AddRecord(msg, &state, mdnsHosts, cnameTarget, state.QType())
 		log.Debug(msg)
 		w.WriteMsg(msg)
 		return dns.RcodeSuccess, nil
